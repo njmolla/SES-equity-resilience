@@ -49,22 +49,40 @@ class simulate_SES:
     return max(R + (-self.s*R + self.r - E)*self.dt, 0)
 
 
-  def profit(self, inputs, R, W):
+  def profit_without_fee(self, inputs, R, W):
     # Inputs should be an array with E and L as elements.
     E = inputs[0]
     L = inputs[1]
     if E <= 0 or L <= 0:
       try:
-        return -self.c*(self.R_max - R)*E - W*L - self.a/self.d
+        return -self.c*(self.R_max - R)*E - W*L - self.d
       except:
-        print('R:',R)
+        print('R:', R)
         print('E:', E)
         print('L:', L)
         print('W:', W)
         print('d:', self.d)
     else:
-      return self.a*(self.b1*E**self.q + self.b2*L**self.q + 1)**(1/self.q) \
-          - self.c*(self.R_max - R)*E - W*L - self.a/self.d - self.fee_amount(E)
+      return (self.a*(self.b1*E**self.q + self.b2*L**self.q + 1)**(1/self.q)
+          - self.c*(self.R_max - R)*E - W*L - self.d)
+
+  def profit_with_fee(self, inputs, R, W):
+    # Inputs should be an array with E and L as elements.
+    E = inputs[0]
+    L = inputs[1]
+    if E <= 0 or L <= 0:
+      try:
+        return -self.c*(self.R_max - R)*E - W*L - self.d
+      except:
+        print('R:', R)
+        print('E:', E)
+        print('L:', L)
+        print('W:', W)
+        print('d:', self.d)
+    else:
+      return (self.a*(self.b1*E**self.q + self.b2*L**self.q + 1)**(1/self.q)
+          - self.c*(self.R_max - R)*E - W*L - self.d
+          - self.fee*(E - self.fee_cap))
 
 
   def replicator(self, U, L, S, W):
@@ -86,6 +104,7 @@ class simulate_SES:
     return np.clip(W, self.W_min, None)  # Lower bound on wage.
 
 
+  # Not used in this file.
   def fine_amount(self, E):
     # policy cost is a function of extraction
     # if E > self.fine_cap:
@@ -96,6 +115,7 @@ class simulate_SES:
     F[E > self.fine_cap] = self.fine
     return F
 
+  # Not used in this file.
   def fee_amount(self, E):
     # if extraction is above threshold, fee amount is proportional to amount
     # above threshold
@@ -109,27 +129,34 @@ class simulate_SES:
   def multi_gradient_descent(self, U_avail, cost_args):
     R_avail = cost_args[0]
     W_t = cost_args[1]
-    if R_avail < self.fine_cap:
+    cap = min(self.fine_cap, self.fee_cap)
+    if R_avail < cap:
       # if resource is below threshold at which policy applies, only need to do
       # one optimization
-      sol = maximize(self.profit,
+      sol = maximize(self.profit_without_fee,
                      (R_avail/2, U_avail/2),
                      bounds = ((0, R_avail), (0, U_avail)),
                      args = cost_args)
 
     else:
       # Optimize below extraction threshold
-      sol_1 = maximize(self.profit,
-                       (self.fine_cap/2, U_avail/2),
-                       bounds = ((0, self.fine_cap), (0, U_avail)),
+      sol_1 = maximize(self.profit_without_fee,
+                       (cap/2, U_avail/2),
+                       bounds = ((0, cap), (0, U_avail)),
                        args = cost_args)
 
       # Optimize above extraction threshold
-      sol_2 = maximize(self.profit,
-                       ((R_avail + self.fine_cap)/2, U_avail/2),
-                       bounds = ((self.fine_cap, R_avail), (0, U_avail)),
-                       args = cost_args)
-      sol_2.fun -= self.fine
+      if self.fine_cap < self.fee_cap:  # With a fine.
+        sol_2 = maximize(self.profit_without_fee,
+                         ((R_avail + cap)/2, U_avail/2),
+                         bounds = ((cap, R_avail), (0, U_avail)),
+                         args = cost_args)
+        sol_2.fun -= self.fine  # Subtract the fine.
+      else:  # With a fee.
+        sol_2 = maximize(self.profit_with_fee,
+                         ((R_avail + cap)/2, U_avail/2),
+                         bounds = ((cap, R_avail), (0, U_avail)),
+                         args = cost_args)
 
       # Take the best of the optimization solutions as the overall solution
       if sol_1.fun >= sol_2.fun:
@@ -154,7 +181,7 @@ class simulate_SES:
 
   def run(self):
     max_dist = 100  # set distance to arbitrary (large) number
-    tolerance = 0.1 # tolerance for convergence
+    tolerance = 0.3 # tolerance for convergence
 
 
     # Initialize state variables.
@@ -192,24 +219,17 @@ class simulate_SES:
 
       if t > 10:
         # Take last ten points.
-        states = np.transpose(np.array([R[-10::], U[-10::], W[-10::]]))
+        states = np.transpose(np.array( [ np.array(R[-10::])*100, U[-10::], W[-10::] ] ))
         # Subtract each point from the last point.
         diff = states[:9, :] - states[9, :]
         # Find the max Euclidean distance
         max_dist = max(np.linalg.norm(diff, axis = 1))
-        
+
       # Break if exceeding maximum number of time steps
-      if t == 2800:
-        print('Exceeded maximum number of iterations')
-        # Print initial conditions corresponding to failure to converge
-        print('Fine:', self.fine)
-        print('Fine Cap:', self.fine_cap)
-        print('Fee:', self.fee)
-        print('Fee Cap:', self.fee_cap)
-        print('R =',R[0])
-        print('U =',U[0])
-        print('W =',W[0])
+      if t == 2000:
+        converged = False
         break
 
       t += 1
-    return R, E, U, S, W, P, L
+      converged = True
+    return R, E, U, S, W, P, L, converged
