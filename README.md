@@ -1,16 +1,16 @@
-# Resilience and Equity in Social-Ecological Systems with Power Asymmetries
+# Resilience and Equity in Resource Based Communities
 
-A stylized dynamical systems model of the interaction between communities, resource-based industries (such as agriculture or forestry), and natural resources in resource-based communities. Allows for exploring how different policies (a fine or a fee on industrial resource use) influence the community or industry and the overall resilience of the system.
+A stylized dynamical systems model of the interaction between communities, resource-based industries (such as agriculture or forestry), and natural resources in resource-based communities. Allows for exploring how regulating industrial resource extraction influences the community or industry and the overall resilience of the system. The paper based on this analysis can be found here.
 
 ## Usage
-**Required Libraries:** NumPy, SciPy, MatPlotLib, Glob, CSV, pyDOE
+**Required Libraries:** NumPy, SciPy, MatPlotLib, Glob, CSV, pyDOE, pickle, bz2, mpi4py
 
 **Running a single simulation:** After defining all of the parameters, run the following to simulate a single trajectory. If no policy (no fine or fee parameters) is specified, the default is no policy.
 ```
 from simulate import simulate_SES
 simulation = simulate_SES(r, R_max, a, b1, b2, q, c, d, k, p, h, g, m,
                           W_min, dt, R_0, W_0, U_0, fine_cap, fine, fee_cap, fee)
-R, E, U, S, W, P, L = simulation.run()
+R, E, U, S, W, P, L, convergence = simulation.run()
 ```
 All code for producing figures is in [Figure Code](https://github.com/njmolla/SES-equity-resilience/tree/master/Figure%20Code).
 
